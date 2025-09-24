@@ -3,24 +3,60 @@
 #include "SDTAIController.h"
 #include "SoftDesignTraining.h"
 #include "SDTUtils.h"
+#include "SDTCollectible.h"
+#include "SoftDesignTrainingMainCharacter.h"
+#include "Engine/OverlapResult.h"
+
 
 void ASDTAIController::Tick(float deltaTime)
 {
-	ChasePlayer(deltaTime);
-}
-
-bool ASDTAIController::ChasePlayer(float deltaTime) {
-	ACharacter* playerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-	return MoveToTarget(playerCharacter->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
-}
-
-bool ASDTAIController::MoveToTarget(FVector target, float speed, float deltaTime)
-{
 	APawn* pawn = GetPawn();
+	UWorld* uWorld = GetWorld();
+	DrawVisionCone(uWorld, pawn, m_VisionAngle);
+	TakeDecision(uWorld, pawn, deltaTime);
+}
+
+void ASDTAIController::TakeDecision(UWorld* world, APawn* pawn, float deltaTime) {
+	ACharacter* playerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+	if (IsPlayerVisible(world, pawn, playerCharacter)) {
+		if (SDTUtils::IsPlayerPoweredUp(world)) {
+			m_LastPlayerPositionReached = true;
+			if (!AvoidWall(pawn, CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime))
+				FleeFromPlayer(pawn, playerCharacter->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
+		}
+		else
+			m_LastPlayerPositionReached = ChasePlayer(pawn, playerCharacter, deltaTime);
+	}
+	else if (!m_LastPlayerPositionReached)
+		m_LastPlayerPositionReached = MoveToTarget(pawn, m_LastPlayerPosition, CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
+	else if (AActor* pickup = IsPickupVisible(world, pawn))
+		MoveToTarget(pawn, pickup->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
+}
+
+void ASDTAIController::DrawVisionCone(UWorld* world, APawn* pawn, float angle) const
+{
+	DrawDebugCone(world, pawn->GetActorLocation(), pawn->GetActorForwardVector(), 500.f, angle, 0, 32, FColor::Green);
+}
+
+bool ASDTAIController::ChasePlayer(APawn* pawn, ACharacter* playerCharacter, float deltaTime) {
+	return MoveToTarget(pawn, playerCharacter->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
+}
+
+bool ASDTAIController::FleeFromPlayer(APawn* pawn, FVector target, float speed, float deltaTime) {
 	FVector const pawnPosition(pawn->GetActorLocation());
-	FVector const toTarget = target - pawnPosition;
-	FVector const displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
-	pawn->SetActorRotation(displacement.ToOrientationQuat());
+	FVector2D const toTarget = FVector2D(pawnPosition) - FVector2D(target);
+	FVector2D const displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
+	pawn->SetActorRotation(FMath::Lerp(pawn->GetActorRotation(), FVector(displacement, 0.f).ToOrientationRotator(), 0.05f));
+	pawn->AddMovementInput(pawn->GetActorForwardVector(), speed / m_MaxSpeed);
+	return toTarget.Size() < speed * deltaTime;
+}
+
+bool ASDTAIController::MoveToTarget(APawn* pawn, FVector target, float speed, float deltaTime)
+{
+	FVector const pawnPosition(pawn->GetActorLocation());
+	FVector2D const toTarget = FVector2D(target) - FVector2D(pawnPosition);
+	FVector2D const displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
+	pawn->SetActorRotation(FVector(displacement, 0.f).ToOrientationQuat());
 	pawn->AddMovementInput(pawn->GetActorForwardVector(), speed / m_MaxSpeed);
 	return toTarget.Size() < speed * deltaTime;
 }
@@ -30,8 +66,7 @@ float ASDTAIController::CalculateMovement(float maxSpeed, float acceleration, fl
 	return m_Speed;
 }
 
-float ASDTAIController::AvoidWall(float delaTime) {
-	APawn* pawn = GetPawn();
+bool ASDTAIController::AvoidWall(APawn* pawn, float speed, float delaTime) {
 	TArray<struct FHitResult> hitResults;
 	if (SDTUtils::CastRay(GetWorld(), pawn->GetActorLocation(), pawn->GetActorLocation() + pawn->GetActorForwardVector() * m_Speed, hitResults, false)) {
 		FVector orientation = FVector::CrossProduct(FVector(hitResults[0].ImpactNormal), pawn->GetActorUpVector()).GetSafeNormal();
@@ -40,8 +75,10 @@ float ASDTAIController::AvoidWall(float delaTime) {
 		FVector Dir = (TargetLoc - MyLoc);
 		Dir.Normalize();
 		pawn->SetActorRotation(FMath::Lerp(pawn->GetActorRotation(), Dir.Rotation(), 0.05f));
+		pawn->AddMovementInput(pawn->GetActorForwardVector(), speed / m_MaxSpeed);
+		return true;
 	}
-	return 0.f;
+	return false;
 }
 
 void ASDTAIController::BeginPlay()
@@ -51,40 +88,56 @@ void ASDTAIController::BeginPlay()
 	m_MaxSpeed = MyCharacter->GetCharacterMovement()->MaxWalkSpeed;
 }
 
-void ASDTAIController::ResetSpeed() {
+void ASDTAIController::Reset() {
 	m_Speed = 0;
+	m_LastPlayerPositionReached = true;
 }
 
 TArray<FOverlapResult> ASDTAIController::CollectTargetActorsInFrontOfCharacter(APawn const* pawn) const
 {
 	TArray<FOverlapResult> results;
 
-	SDTUtils::SphereOverlap(GetWorld(), pawn->GetActorLocation() + pawn->GetActorForwardVector() * 750.f, 1000.f, results, true);
+	SDTUtils::SphereOverlap(GetWorld(), pawn->GetActorLocation(), 1000.f, results, true);
 
 	return results;
 }
 
-bool ASDTAIController::IsInsideCone(APawn* pawn, AActor* targetActor) const
+bool ASDTAIController::IsVisible(UWorld* world, APawn* pawn, AActor* targetActor)
 {
-	if (FVector::Dist2D(pawn->GetActorLocation(), targetActor->GetActorLocation()) > 500.f)
-	{
+	if (pawn->GetDistanceTo(targetActor) > 1000.f)
 		return false;
-	}
 
-	auto pawnForwardVector = pawn->GetActorForwardVector();
-	auto dir = targetActor->GetActorLocation() - pawn->GetActorLocation();
+	TArray<struct FHitResult> hitResult;
+	SDTUtils::CastRay(world, pawn->GetActorLocation(), targetActor->GetActorLocation(), hitResult, true);
 
-	auto value = FVector::DotProduct(dir.GetSafeNormal(), pawnForwardVector.GetSafeNormal());
-	auto angle = FMath::Acos(value);
-
-	auto isVisible = FMath::Abs(angle) <= m_VisionAngle;
-
-	if (isVisible)
+	for (int j = 0; j < hitResult.Num(); ++j)
 	{
-		DrawDebugSphere(GetWorld(), targetActor->GetActorLocation(), 100.f, 32, FColor::Magenta);
+		if (hitResult[j].GetActor() != targetActor && !hitResult[j].GetActor()->IsA(ASDTCollectible::StaticClass()))
+			return false;
 	}
+	return true;
+}
 
-	GEngine->AddOnScreenDebugMessage(-1, 0.16f, FColor::Red, FString::Printf(TEXT("Actor : %s is %s"), *targetActor->GetName(), isVisible ? TEXT("visible") : TEXT("not visible")));
+bool ASDTAIController::IsPlayerVisible(UWorld* world, APawn* pawn, AActor* targetActor)
+{
+	if (!IsVisible(world, pawn, targetActor))
+		return false;
+	m_LastPlayerPosition = targetActor->GetActorLocation();
+	return true;
+}
 
-	return isVisible;
+AActor* ASDTAIController::IsPickupVisible(UWorld* world, APawn* pawn) {
+	AActor* nearestPickup = nullptr;
+	TArray<FOverlapResult> results = CollectTargetActorsInFrontOfCharacter(pawn).FilterByPredicate([&](FOverlapResult overlapResult) {
+		return overlapResult.GetActor()->IsA(ASDTCollectible::StaticClass()) && !Cast<ASDTCollectible>(overlapResult.GetActor())->IsOnCooldown();
+		});
+	Algo::Sort(results, [&](FOverlapResult lhs, FOverlapResult rhs)
+		{
+			return pawn->GetDistanceTo(lhs.GetActor()) < pawn->GetDistanceTo(rhs.GetActor());
+		});
+	for (FOverlapResult result : results) {
+		if (IsVisible(world, pawn, result.GetActor()))
+			return result.GetActor();
+	}
+	return nullptr;
 }

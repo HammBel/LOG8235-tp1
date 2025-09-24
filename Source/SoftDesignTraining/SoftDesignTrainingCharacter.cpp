@@ -42,7 +42,7 @@ void ASoftDesignTrainingCharacter::OnBeginOverlap(UPrimitiveComponent* Overlappe
         if (mainCharacter->IsPoweredUp()) {
             SetActorLocation(m_StartingPosition);
             if (ASDTAIController* controller = Cast<ASDTAIController>(GetController())) {
-                controller->ResetSpeed();
+                controller->Reset();
             }
         }
     }

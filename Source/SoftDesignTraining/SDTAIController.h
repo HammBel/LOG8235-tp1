@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Math/UnrealMathUtility.h"
 #include "CoreMinimal.h"
 #include "AIController.h"
 
@@ -21,19 +22,29 @@ public:
     float m_Acceleration = 100.f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AI)
-    float m_VisionAngle = 100.f;
+    float m_VisionAngle = PI / 3;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AI)
+    float m_ViewDistance = 2000.f;
 
     virtual void Tick(float deltaTime) override;
     virtual void BeginPlay() override;
-    void ResetSpeed();
+    void Reset();
     
 private:
     float m_Speed = 0.f;
     float m_MaxSpeed = 0.f;
+    FVector m_LastPlayerPosition = FVector();
+    bool m_LastPlayerPositionReached = true;
     float CalculateMovement(float maxSpeed, float acceleration, float delaTime);
-    float AvoidWall(float delaTime);
-    bool MoveToTarget(FVector target, float speed, float deltaTime);
-    bool ChasePlayer(float deltaTime);
+    bool AvoidWall(APawn* pawn, float speed, float delaTime);
+    bool MoveToTarget(APawn* pawn, FVector target, float speed, float deltaTime);
+    bool ChasePlayer(APawn* pawn, ACharacter* playerCharacter, float deltaTime);
+    bool FleeFromPlayer(APawn* pawn, FVector target, float speed, float deltaTime);
     TArray<FOverlapResult> CollectTargetActorsInFrontOfCharacter(APawn const* pawn) const;
-    bool IsInsideCone(APawn* pawn, AActor* targetActor) const;
+    void DrawVisionCone(UWorld* world, APawn* pawn, float angle) const;
+    void TakeDecision(UWorld* world, APawn* pawn, float deltaTime);
+    bool IsVisible(UWorld* world, APawn* pawn, AActor* targetActor);
+    bool IsPlayerVisible(UWorld* world, APawn* pawn, AActor* targetActor);
+    AActor* IsPickupVisible(UWorld* world, APawn* pawn);
 };
