@@ -6,6 +6,7 @@
 #include "SDTUtils.h"
 #include "DrawDebugHelpers.h"
 #include "SDTCollectible.h"
+#include "SDTAIController.h"
 
 
 ASoftDesignTrainingCharacter::ASoftDesignTrainingCharacter()
@@ -38,7 +39,11 @@ void ASoftDesignTrainingCharacter::OnBeginOverlap(UPrimitiveComponent* Overlappe
     }
     else if (ASoftDesignTrainingMainCharacter* mainCharacter = Cast<ASoftDesignTrainingMainCharacter>(OtherActor))
     {
-        if(mainCharacter->IsPoweredUp())
+        if (mainCharacter->IsPoweredUp()) {
             SetActorLocation(m_StartingPosition);
+            if (ASDTAIController* controller = Cast<ASDTAIController>(GetController())) {
+                controller->ResetSpeed();
+            }
+        }
     }
 }
