@@ -32,6 +32,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Audio)
     USoundBase* playerCollectSound;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FX")
+    UParticleSystem* ParticleEffect;
+
     virtual void Tick(float deltaTime) override;
     virtual void BeginPlay() override;
 

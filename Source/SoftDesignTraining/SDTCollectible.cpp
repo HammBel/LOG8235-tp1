@@ -22,6 +22,16 @@ void ASDTCollectible::Collect(AController* pawn)
     else if (agentCollectSound) {
         UGameplayStatics::PlaySoundAtLocation(GetWorld(), agentCollectSound, GetActorLocation());
     }
+
+    if (ParticleEffect)
+    {
+        UGameplayStatics::SpawnEmitterAtLocation(
+            GetWorld(),
+            ParticleEffect,
+            GetActorLocation(),
+            GetActorRotation()
+        );
+    }
   
     GetWorld()->GetTimerManager().SetTimer(m_CollectCooldownTimer, this, &ASDTCollectible::OnCooldownDone, m_CollectCooldownDuration, false);
 
