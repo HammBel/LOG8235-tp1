@@ -34,8 +34,7 @@ void ASoftDesignTrainingCharacter::OnBeginOverlap(UPrimitiveComponent* Overlappe
         {
             OnCollectPowerUp();
         }
-
-        collectibleActor->Collect();
+        collectibleActor->Collect(GetController());
     }
     else if (ASoftDesignTrainingMainCharacter* mainCharacter = Cast<ASoftDesignTrainingMainCharacter>(OtherActor))
     {

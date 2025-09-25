@@ -13,12 +13,21 @@ void ASDTCollectible::BeginPlay()
     Super::BeginPlay();
 }
 
-void ASDTCollectible::Collect()
+void ASDTCollectible::Collect(AController* pawn)
 {
+    
+    if (Cast<APlayerController>(pawn) && playerCollectSound){
+        UGameplayStatics::PlaySoundAtLocation(GetWorld(), playerCollectSound, GetActorLocation());
+    }
+    else if (agentCollectSound) {
+        UGameplayStatics::PlaySoundAtLocation(GetWorld(), agentCollectSound, GetActorLocation());
+    }
+  
     GetWorld()->GetTimerManager().SetTimer(m_CollectCooldownTimer, this, &ASDTCollectible::OnCooldownDone, m_CollectCooldownDuration, false);
 
     GetStaticMeshComponent()->SetVisibility(false);
 }
+
 
 void ASDTCollectible::OnCooldownDone()
 {

@@ -16,7 +16,7 @@ class SOFTDESIGNTRAINING_API ASDTCollectible : public AStaticMeshActor
 public:
     ASDTCollectible();
 
-    void Collect();
+    void Collect(AController* pawn);
     void OnCooldownDone();
     bool IsOnCooldown();
 
@@ -25,6 +25,12 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AI)
         bool isMoveable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Audio)
+    USoundBase* agentCollectSound;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Audio)
+    USoundBase* playerCollectSound;
 
     virtual void Tick(float deltaTime) override;
     virtual void BeginPlay() override;
