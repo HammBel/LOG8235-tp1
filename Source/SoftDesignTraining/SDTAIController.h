@@ -25,7 +25,7 @@ public:
     float m_VisionAngle = PI / 3;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AI)
-    float m_ViewDistance = 2000.f;
+    float m_ViewDistance = 1000.f;
 
     virtual void Tick(float deltaTime) override;
     virtual void BeginPlay() override;
@@ -34,7 +34,9 @@ public:
 private:
     float m_Speed = 0.f;
     float m_MaxSpeed = 0.f;
+    float halfWidth;
     AActor* m_ObstacleToDodge;
+    FVector m_ObstacleToDodgeNormal;
     bool m_isRotatingRight;
     FVector m_LastPlayerPosition = FVector();
     bool m_LastPlayerPositionReached = true;
