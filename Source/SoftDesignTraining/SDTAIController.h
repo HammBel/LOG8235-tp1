@@ -34,6 +34,8 @@ public:
 private:
     float m_Speed = 0.f;
     float m_MaxSpeed = 0.f;
+    AActor* m_ObstacleToDodge;
+    bool m_isRotatingRight;
     FVector m_LastPlayerPosition = FVector();
     bool m_LastPlayerPositionReached = true;
     float CalculateMovement(float maxSpeed, float acceleration, float delaTime);
@@ -47,4 +49,5 @@ private:
     bool IsVisible(UWorld* world, APawn* pawn, AActor* targetActor);
     bool IsPlayerVisible(UWorld* world, APawn* pawn, AActor* targetActor);
     AActor* IsPickupVisible(UWorld* world, APawn* pawn);
+    void Roam(APawn* pawn, float deltaTime);
 };
