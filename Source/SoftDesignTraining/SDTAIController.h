@@ -17,7 +17,6 @@ class SOFTDESIGNTRAINING_API ASDTAIController : public AAIController
     GENERATED_BODY()
 public:
 
-
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AI)
     float m_Acceleration = 100.f;
 
@@ -32,6 +31,14 @@ public:
     void Reset();
     
 private:
+    struct FCastInfo
+    {
+        FVector Start;
+        FVector End;
+        TArray<FHitResult> Hits;
+        FColor DebugColor;
+    };
+
     float m_Speed = 0.f;
     float m_MaxSpeed = 0.f;
     bool m_IsFleeing = false;
@@ -53,4 +60,7 @@ private:
     bool IsPlayerVisible(UWorld* world, APawn* pawn, AActor* targetActor);
     AActor* IsPickupVisible(UWorld* world, APawn* pawn);
     void Roam(APawn* pawn, float deltaTime);
+    TArray<FCastInfo> CheckSurrounding(APawn* pawn);
+    int ComputeObstacleToDodge(APawn* pawn, const TArray<FCastInfo>& Casts);
+    bool AvoidWall2(APawn* pawn, float speed, float deltaTime);
 };
