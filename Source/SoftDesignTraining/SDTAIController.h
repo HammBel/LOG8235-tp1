@@ -34,14 +34,15 @@ public:
 private:
     float m_Speed = 0.f;
     float m_MaxSpeed = 0.f;
+    bool m_IsFleeing = false;
     float halfWidth;
     AActor* m_ObstacleToDodge;
     FVector m_ObstacleToDodgeNormal;
     bool m_isRotatingRight;
     FVector m_LastPlayerPosition = FVector();
     bool m_LastPlayerPositionReached = true;
-    float CalculateMovement(float maxSpeed, float acceleration, float delaTime);
-    bool AvoidWall(APawn* pawn, float speed, float delaTime);
+    float CalculateMovement(float maxSpeed, float acceleration, float deltaTime);
+    bool AvoidWall(APawn* pawn, float speed, float deltaTime);
     bool MoveToTarget(APawn* pawn, FVector target, float speed, float deltaTime);
     bool ChasePlayer(APawn* pawn, ACharacter* playerCharacter, float deltaTime);
     bool FleeFromPlayer(APawn* pawn, FVector target, float speed, float deltaTime);
