@@ -58,42 +58,69 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
     FVector2D displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
     SDTUtils::BoxCast(world, pawn->GetActorLocation(), target, halfExtent, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false, true);
     if (hitResults.Num() != 0) {
+        FVector normal = hitResults[0].ImpactNormal;
+        UE_LOG(LogTemp, Warning, TEXT("%f, %f, %f"), normal.X, normal.Y, normal.Z);
         FVector right = FVector::CrossProduct(FVector(FVector2D(hitResults[0].ImpactNormal), 0.0f), pawn->GetActorUpVector()).GetSafeNormal();
         FVector* leftSafePosition = nullptr;
         FVector* rightSafePosition = nullptr;
-        float multiplier = 1;
+        float angle = 1;
         FVector2D newToTarget;
         FVector2D newDisplacement;
         FVector newTarget;
         while (!leftSafePosition || !rightSafePosition) {
             if (!rightSafePosition) {
-                newTarget = target + right * 100 * multiplier;
+                newTarget = target + FVector(toTarget.Size() * cos(FMath::DegreesToRadians(angle)), toTarget.Size() * sin(FMath::DegreesToRadians(angle)), 0);
                 newToTarget = FVector2D(newTarget) - FVector2D(pawnPosition);
                 newDisplacement = FMath::Min(newToTarget.Size(), speed * deltaTime) * newToTarget.GetSafeNormal();
-                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation(), newTarget, halfExtent * .75f, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
-                    rightSafePosition = new FVector(newTarget);
+                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation(), newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
+                    UE_LOG(LogTemp, Warning, TEXT("RIGHT SAFE"));
+                    TArray<FHitResult> rayHits;
+                    if (!SDTUtils::CastRay(world, pawn->GetActorLocation(), newTarget, rayHits, true))
+                        rightSafePosition = new FVector(newTarget);
+                    else {
+                        rightSafePosition = new FVector(rayHits[0].Location);
+                    }
                 }
             }
             if (!leftSafePosition) {
-                newTarget = target - right * 100 * multiplier;
+                newTarget = target + FVector(toTarget.Size() * cos(FMath::DegreesToRadians(-angle)), toTarget.Size() * sin(FMath::DegreesToRadians(-angle)), 0);
                 newToTarget = FVector2D(newTarget) - FVector2D(pawnPosition);
                 newDisplacement = FMath::Min(newToTarget.Size(), speed * deltaTime) * newToTarget.GetSafeNormal();
-                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation(), newTarget, halfExtent, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
-                    leftSafePosition = new FVector(newTarget);
+                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation(), newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
+                    UE_LOG(LogTemp, Warning, TEXT("LEFT SAFE"));
+                    TArray<FHitResult> rayHits;
+                    if (!SDTUtils::CastRay(world, pawn->GetActorLocation(), newTarget, rayHits, true))
+                        leftSafePosition = new FVector(newTarget);
+                    else {
+                        leftSafePosition = new FVector(rayHits[0].Location);
+                    }
                 }
             }
-            multiplier += 1;
-            if (multiplier > 30)
+            angle += 1;
+            if (angle > 180)
                 break;
         }
-        if (!leftSafePosition && !rightSafePosition)
+        if (!leftSafePosition && !rightSafePosition) {
+            UE_LOG(LogTemp, Warning, TEXT("DONT MOVE"));
             return false;
+        }
         else if (!leftSafePosition || !rightSafePosition) {
+            if (leftSafePosition) {
+                UE_LOG(LogTemp, Warning, TEXT("ONLY LEFT SAFE"));
+            }
+            else {
+                UE_LOG(LogTemp, Warning, TEXT("ONLY RIGHT SAFE"));
+            }
             target = leftSafePosition ? *leftSafePosition : *rightSafePosition;
         }
-        else if ((FVector2D(*leftSafePosition) - FVector2D(target)).Size() < (FVector2D(*rightSafePosition) - FVector2D(target)).Size())
+        else if ((FVector::DotProduct(*leftSafePosition - target, normal) * normal).Size() < (FVector::DotProduct(*rightSafePosition - target, normal) * normal).Size()) {
+            UE_LOG(LogTemp, Warning, TEXT("PREFER LEFT"));
             target = *leftSafePosition;
-        else target = *rightSafePosition;
+        }
+        else {
+            UE_LOG(LogTemp, Warning, TEXT("PREFER right"));
+            target = *rightSafePosition;
+        }
     }
     toTarget = FVector2D(target) - FVector2D(pawnPosition);
     displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
