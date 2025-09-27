@@ -36,6 +36,7 @@ private:
         FVector Start;
         FVector End;
         TArray<FHitResult> Hits;
+        FCollisionObjectQueryParams* objectQueryParams;
         FColor DebugColor;
     };
 
@@ -43,6 +44,7 @@ private:
     float m_MaxSpeed = 0.f;
     bool m_IsFleeing = false;
     float halfWidth;
+    float halfHeight;
     AActor* m_ObstacleToDodge;
     FVector m_ObstacleToDodgeNormal;
     bool m_isRotatingRight;

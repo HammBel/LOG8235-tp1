@@ -28,7 +28,7 @@ bool SDTUtils::IsPlayerPoweredUp(UWorld * uWorld)
     return castedPlayerCharacter->IsPoweredUp();
 }
 
-bool SDTUtils::CastRay(UWorld* uWorld, const FVector& start, const FVector& end, TArray<struct FHitResult>& outHits, bool drawDebug)
+bool SDTUtils::CastRay(UWorld* uWorld, const FVector& start, const FVector& end, TArray<struct FHitResult>& outHits, bool drawDebug, FCollisionObjectQueryParams* params)
 {
     if (uWorld == nullptr)
         return false;
@@ -37,16 +37,18 @@ bool SDTUtils::CastRay(UWorld* uWorld, const FVector& start, const FVector& end,
     if (drawDebug)
         DrawDebugLine(uWorld, start, end, FColor::Green);
 
-
+    FCollisionObjectQueryParams* objectQueryParams = params;
     //Multi line trace
-    FCollisionObjectQueryParams objectQueryParams;
-    objectQueryParams.AddObjectTypesToQuery(ECC_PhysicsBody);
-    objectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
-    objectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+    if (!params) {
+        FCollisionObjectQueryParams objectParams = FCollisionObjectQueryParams::DefaultObjectQueryParam;
+        objectParams.AddObjectTypesToQuery(ECC_WorldStatic);
+        objectParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+        objectQueryParams = &objectParams;
+    }
     FCollisionQueryParams queryParams = FCollisionQueryParams::DefaultQueryParam;
     queryParams.bReturnPhysicalMaterial = true;
-
-    uWorld->LineTraceMultiByObjectType(outHits, start, end, objectQueryParams, queryParams);
+ 
+    uWorld->LineTraceMultiByObjectType(outHits, start, end, *objectQueryParams, queryParams);
 
     //Draw hits
     if (drawDebug)
