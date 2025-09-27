@@ -12,7 +12,94 @@ void ASDTAIController::Tick(float deltaTime)
 {
 	APawn* pawn = GetPawn();
 	UWorld* uWorld = GetWorld();
-	TakeDecision(uWorld, pawn, deltaTime);
+    ACharacter* playerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+    SetState(uWorld, pawn, playerCharacter);
+	TakeDecision(uWorld, pawn, playerCharacter, deltaTime);
+}
+
+void ASDTAIController::BeginPlay()
+{
+    Super::BeginPlay();
+    ACharacter* MyCharacter = GetCharacter();
+    m_MaxSpeed = MyCharacter->GetCharacterMovement()->MaxWalkSpeed;
+
+    FVector Origin;
+    MyCharacter->GetActorBounds(true, Origin, halfExtent);
+    halfWidth = halfExtent.Y;
+    halfHeight = halfExtent.Z;
+}
+
+void ASDTAIController::SetState(UWorld* world, APawn* pawn, ACharacter* playerCharacter) {
+    if (playerCharacter && IsPlayerVisible(world, pawn, playerCharacter)) {
+        if (SDTUtils::IsPlayerPoweredUp(world)) {
+            m_State = FLEEING_PLAYER;
+        }
+        else {
+            m_State = CHASING_PLAYER;
+        }
+    }
+    else if (!m_LastPlayerPositionReached) {
+        m_State = CHASING_PLAYER;
+    }
+    else if (IsPickupVisible(world, pawn)) {
+        m_State = CHASING_PICKUP;
+    }
+    else {
+        m_State = ROAMING;
+    }
+}
+
+bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, float speed, float deltaTime)
+{
+    FRotator currentRotation = pawn->GetActorRotation();
+    TArray<FHitResult> hitResults;
+    FVector const pawnPosition(pawn->GetActorLocation());
+    FVector2D toTarget = FVector2D(target) - FVector2D(pawnPosition);
+    FVector2D displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
+    SDTUtils::BoxCast(world, pawn->GetActorLocation(), target, halfExtent, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false, true);
+    if (hitResults.Num() != 0) {
+        FVector right = FVector::CrossProduct(FVector(FVector2D(hitResults[0].ImpactNormal), 0.0f), pawn->GetActorUpVector()).GetSafeNormal();
+        FVector* leftSafePosition = nullptr;
+        FVector* rightSafePosition = nullptr;
+        float multiplier = 1;
+        FVector2D newToTarget;
+        FVector2D newDisplacement;
+        FVector newTarget;
+        while (!leftSafePosition || !rightSafePosition) {
+            if (!rightSafePosition) {
+                newTarget = target + right * 100 * multiplier;
+                newToTarget = FVector2D(newTarget) - FVector2D(pawnPosition);
+                newDisplacement = FMath::Min(newToTarget.Size(), speed * deltaTime) * newToTarget.GetSafeNormal();
+                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation(), newTarget, halfExtent * .75f, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
+                    rightSafePosition = new FVector(newTarget);
+                }
+            }
+            if (!leftSafePosition) {
+                newTarget = target - right * 100 * multiplier;
+                newToTarget = FVector2D(newTarget) - FVector2D(pawnPosition);
+                newDisplacement = FMath::Min(newToTarget.Size(), speed * deltaTime) * newToTarget.GetSafeNormal();
+                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation(), newTarget, halfExtent, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
+                    leftSafePosition = new FVector(newTarget);
+                }
+            }
+            multiplier += 1;
+            if (multiplier > 30)
+                break;
+        }
+        if (!leftSafePosition && !rightSafePosition)
+            return false;
+        else if (!leftSafePosition || !rightSafePosition) {
+            target = leftSafePosition ? *leftSafePosition : *rightSafePosition;
+        }
+        else if ((FVector2D(*leftSafePosition) - FVector2D(target)).Size() < (FVector2D(*rightSafePosition) - FVector2D(target)).Size())
+            target = *leftSafePosition;
+        else target = *rightSafePosition;
+    }
+    toTarget = FVector2D(target) - FVector2D(pawnPosition);
+    displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
+    pawn->SetActorRotation(FMath::Lerp(pawn->GetActorRotation(), FVector(displacement, 0.f).ToOrientationRotator(), 0.25f));
+    pawn->AddMovementInput(pawn->GetActorForwardVector(), speed / m_MaxSpeed);
+    return toTarget.Size() < speed * deltaTime;
 }
 
 void ASDTAIController::Roam(APawn* pawn, float deltaTime)
@@ -26,9 +113,7 @@ void ASDTAIController::Roam(APawn* pawn, float deltaTime)
 
 
 
-void ASDTAIController::TakeDecision(UWorld* world, APawn* pawn, float deltaTime) {
-    //Roam(pawn, deltaTime);
-    ACharacter* playerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+void ASDTAIController::TakeDecision(UWorld* world, APawn* pawn, ACharacter* playerCharacter, float deltaTime) {
     if (playerCharacter && IsPlayerVisible(world, pawn, playerCharacter)) {
         if (SDTUtils::IsPlayerPoweredUp(world)) {
             //if (!m_IsFleeing) {
@@ -49,12 +134,12 @@ void ASDTAIController::TakeDecision(UWorld* world, APawn* pawn, float deltaTime)
     }
     else if (!m_LastPlayerPositionReached) {
         m_IsFleeing = false;
-        m_LastPlayerPositionReached = MoveToTarget(pawn, m_LastPlayerPosition, CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
+        m_LastPlayerPositionReached = MoveToTarget(world, pawn, m_LastPlayerPosition, CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
 
     }
     else if (AActor* pickup = IsPickupVisible(world, pawn)) {
         m_IsFleeing = false;
-        MoveToTarget(pawn, pickup->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
+        MoveToTarget(world, pawn, pickup->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
     }
 
     else {
@@ -69,7 +154,7 @@ void ASDTAIController::DrawVisionCone(UWorld* world, APawn* pawn, float angle) c
 }
 
 bool ASDTAIController::ChasePlayer(APawn* pawn, ACharacter* playerCharacter, float deltaTime) {
-	return MoveToTarget(pawn, playerCharacter->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
+	return MoveToTarget(GetWorld(), pawn, playerCharacter->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
 }
 
 bool ASDTAIController::FleeFromPlayer(APawn* pawn, FVector target, float speed, float deltaTime) {
@@ -85,18 +170,6 @@ bool ASDTAIController::FleeFromPlayer(APawn* pawn, FVector target, float speed, 
 	pawn->SetActorRotation(FVector(displacement, 0.f).ToOrientationRotator());
     AvoidWall2(pawn, speed, deltaTime);
 	pawn->AddMovementInput(pawn->GetActorForwardVector(), speed / m_MaxSpeed);
-	return toTarget.Size() < speed * deltaTime;
-}
-
-bool ASDTAIController::MoveToTarget(APawn* pawn, FVector target, float speed, float deltaTime)
-{
-	FVector const pawnPosition(pawn->GetActorLocation());
-	FVector2D const toTarget = FVector2D(target) - FVector2D(pawnPosition);
-	FVector2D const displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
-    FRotator currentRotation = pawn->GetActorRotation();
-	pawn->SetActorRotation(FMath::Lerp(pawn->GetActorRotation(),  FVector(displacement, 0.f).ToOrientationRotator(), 0.25f));
-    AvoidWall(pawn, m_Speed, deltaTime);
-    pawn->AddMovementInput(pawn->GetActorForwardVector(), speed / m_MaxSpeed);
 	return toTarget.Size() < speed * deltaTime;
 }
 
@@ -424,19 +497,6 @@ bool ASDTAIController::AvoidWall(APawn* pawn, float speed, float deltaTime) {
         m_Speed = FMath::Lerp(m_Speed, targetSpeed, 0.25f);
     }
     return true;
-}
-
-void ASDTAIController::BeginPlay()
-{
-	Super::BeginPlay();
-	ACharacter* MyCharacter = GetCharacter();
-	m_MaxSpeed = MyCharacter->GetCharacterMovement()->MaxWalkSpeed;
-
-	FVector Origin;
-	FVector BoxExtent;
-	MyCharacter->GetActorBounds(true, Origin, BoxExtent);
-	halfWidth = BoxExtent.Y;
-    halfHeight = BoxExtent.Z;
 }
 
 void ASDTAIController::Reset() {

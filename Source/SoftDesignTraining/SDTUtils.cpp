@@ -94,6 +94,8 @@ bool SDTUtils::SphereCast(UWorld* uWorld, const FVector& start, const FVector& e
 
 
     FCollisionObjectQueryParams objectQueryParams; // All objects
+    objectQueryParams.AddObjectTypesToQuery(ECC_GameTraceChannel3);
+    objectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
     FCollisionShape collisionShape;
     collisionShape.SetSphere(radius);
     FCollisionQueryParams queryParams = FCollisionQueryParams::DefaultQueryParam;
@@ -155,4 +157,63 @@ void SDTUtils::DebugDrawPrimitive(UWorld* uWorld, const UPrimitiveComponent& pri
     FVector extent = primitive.Bounds.BoxExtent;
 
     DrawDebugBox(uWorld, center, extent, FColor::Red);
+}
+
+bool SDTUtils::BoxCast(
+    UWorld* uWorld,
+    const FVector& start,
+    const FVector& end,
+    const FVector& halfExtents, // Half size of the box (X,Y,Z)
+    const FQuat& orientation,   // Box orientation
+    TArray<FHitResult>& outHits,
+    bool shouldCheckWall,
+    bool drawDebug
+)
+{
+    if (uWorld == nullptr)
+        return false;
+
+    // Debug draw
+    if (drawDebug)
+    {
+        FVector center = (start + end) * 0.5f;
+        FVector dir;
+        float length;
+        (end - start).ToDirectionAndLength(dir, length);
+
+        // Draw the swept box (as two boxes + line between)
+        DrawDebugBox(uWorld, start, halfExtents, orientation, FColor::Green);
+        DrawDebugBox(uWorld, end, halfExtents, orientation, FColor::Green);
+        DrawDebugLine(uWorld, start, end, FColor::Red);
+    }
+
+    FCollisionObjectQueryParams objectQueryParams; // All objects
+    objectQueryParams.AddObjectTypesToQuery(ECC_GameTraceChannel3);
+    if (shouldCheckWall) objectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
+    FCollisionShape collisionShape;
+    collisionShape = FCollisionShape::MakeBox(halfExtents);
+
+    FCollisionQueryParams queryParams = FCollisionQueryParams::DefaultQueryParam;
+    queryParams.bReturnPhysicalMaterial = true;
+
+    bool hit = uWorld->SweepMultiByObjectType(
+        outHits,
+        start,
+        end,
+        orientation,
+        objectQueryParams,
+        collisionShape,
+        queryParams
+    );
+
+    // Debug draw hit points
+    if (drawDebug)
+    {
+        for (int32 i = 0; i < outHits.Num(); ++i)
+        {
+            DebugDrawHitPoint(uWorld, outHits[i]);
+        }
+    }
+
+    return hit;
 }

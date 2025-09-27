@@ -29,6 +29,13 @@ public:
     virtual void Tick(float deltaTime) override;
     virtual void BeginPlay() override;
     void Reset();
+
+    enum AIState {
+        ROAMING,
+        FLEEING_PLAYER,
+        CHASING_PLAYER,
+        CHASING_PICKUP
+    };
     
 private:
     struct FCastInfo
@@ -40,9 +47,12 @@ private:
         FColor DebugColor;
     };
 
+    void SetState(UWorld* world, APawn* pawn, ACharacter* playerCharacter);
+    AIState  m_State = ROAMING;
     float m_Speed = 0.f;
     float m_MaxSpeed = 0.f;
     bool m_IsFleeing = false;
+    FVector halfExtent;
     float halfWidth;
     float halfHeight;
     AActor* m_ObstacleToDodge;
@@ -52,12 +62,12 @@ private:
     bool m_LastPlayerPositionReached = true;
     float CalculateMovement(float maxSpeed, float acceleration, float deltaTime);
     bool AvoidWall(APawn* pawn, float speed, float deltaTime);
-    bool MoveToTarget(APawn* pawn, FVector target, float speed, float deltaTime);
+    bool MoveToTarget(UWorld* world, APawn* pawn, FVector target, float speed, float deltaTime);
     bool ChasePlayer(APawn* pawn, ACharacter* playerCharacter, float deltaTime);
     bool FleeFromPlayer(APawn* pawn, FVector target, float speed, float deltaTime);
     TArray<FOverlapResult> CollectTargetActorsInFrontOfCharacter(APawn const* pawn) const;
     void DrawVisionCone(UWorld* world, APawn* pawn, float angle) const;
-    void TakeDecision(UWorld* world, APawn* pawn, float deltaTime);
+    void TakeDecision(UWorld* world, APawn* pawn, ACharacter* playerCharacter, float deltaTime);
     bool IsVisible(UWorld* world, APawn* pawn, AActor* targetActor);
     bool IsPlayerVisible(UWorld* world, APawn* pawn, AActor* targetActor);
     AActor* IsPickupVisible(UWorld* world, APawn* pawn);

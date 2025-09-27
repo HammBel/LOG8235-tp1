@@ -15,7 +15,16 @@ public:
     static bool CastRay(UWorld* uWorld, const FVector& start, const FVector& end, TArray<struct FHitResult>& outHits, bool drawDebug, FCollisionObjectQueryParams* params = nullptr);
     static bool SphereCast(UWorld* uWorld, const FVector& start, const FVector& end, float radius, TArray<struct FHitResult>& outHits, bool drawDebug);
     static bool SphereOverlap(UWorld* uWorld, const FVector& pos, float radius, TArray<struct FOverlapResult>& outOverlaps, bool drawdebug);
-
+    static bool BoxCast(
+        UWorld* uWorld,
+        const FVector& start,
+        const FVector& end,
+        const FVector& halfExtents, // Half size of the box (X,Y,Z)
+        const FQuat& orientation,   // Box orientation
+        TArray<FHitResult>& outHits,
+        bool shouldCheckWall = true,
+        bool drawDebug = false
+    );
 
 
 protected:

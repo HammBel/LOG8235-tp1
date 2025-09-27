@@ -27,6 +27,9 @@ void ASoftDesignTrainingCharacter::OnBeginOverlap(UPrimitiveComponent* Overlappe
     if (OtherComponent->GetCollisionObjectType() == COLLISION_DEATH_OBJECT)
     {
         SetActorLocation(m_StartingPosition);
+        if (ASDTAIController* controller = Cast<ASDTAIController>(GetController())) {
+            controller->Reset();
+        }
     }
     else if(ASDTCollectible* collectibleActor = Cast<ASDTCollectible>(OtherActor))
     {
