@@ -41,7 +41,7 @@ private:
         FCollisionObjectQueryParams* objectQueryParams;
         FColor DebugColor;
     };
-
+    FTimerHandle TimerHandle;
     float m_Speed = 0.f;
     float m_MaxSpeed = 0.f;
     bool m_IsFleeing = false;

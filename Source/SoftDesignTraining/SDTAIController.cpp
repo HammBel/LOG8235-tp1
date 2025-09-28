@@ -215,7 +215,10 @@ void ASDTAIController::TakeDecision(UWorld* world, APawn* pawn, ACharacter* play
         }
         else {
             m_IsFleeing = false;
+            GetWorld()->GetTimerManager().ClearTimer(TimerHandle);
+            GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &ASDTAIController::ForgetPlayer, 5.0f, false);
             m_LastPlayerPositionReached = ChasePlayer(pawn, playerCharacter, deltaTime);
+            
         }
     }
     else if (!m_LastPlayerPositionReached) {
