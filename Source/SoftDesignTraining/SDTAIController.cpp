@@ -180,7 +180,7 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
 * @return true si le Pawn est suffisamment éloigné de la cible actuelle (a atteint le point de fuite). 
 * @return false sinon 
 */
-bool ASDTAIController::FleeToTarget(UWorld* world, APawn* pawn, FVector playerPosition, float speed, float deltaTime)
+bool ASDTAIController::FleeToTarget(UWorld* world, APawn* pawn, FVector playerPosition, float speed, float deltaTime, bool isRoaming)
 {
     // Calcul d’un premier point de fuite directement opposé au joueur
     FVector target = pawn->GetActorLocation() - (playerPosition - pawn->GetActorLocation()).GetSafeNormal() * speed;
@@ -192,6 +192,8 @@ bool ASDTAIController::FleeToTarget(UWorld* world, APawn* pawn, FVector playerPo
     float InitialYawAngle = FMath::RadiansToDegrees(FMath::Atan2(toTarget.GetSafeNormal().Y, toTarget.GetSafeNormal().X));
     SDTUtils::BoxCast(world, pawn->GetActorLocation(), target, halfExtent, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, true);
     FVector farthestPosition = target;
+    float maxTurningAngle = isRoaming ? 180 : 100;
+    FVector modifiedHalfExtent = isRoaming ? halfExtent : halfExtent * 2;
     // Si la trajectoire est bloquée -> recherche d’alternatives
     if (hitResults.Num() != 0) {
         float angle = 1;
@@ -200,24 +202,36 @@ bool ASDTAIController::FleeToTarget(UWorld* world, APawn* pawn, FVector playerPo
         FVector newTarget;
         float farthestDistance = 0;
         // Explore des chemins a gauche et a droite selon l'angle jusqu’à 100° (positions a l'arriere ignorées)
-        while (angle < 100) {
+        while (angle < maxTurningAngle) {
             // Vérification du coté droit
             newTarget = pawnPosition + FVector(toTarget.Size() * cos(FMath::DegreesToRadians(InitialYawAngle + angle)), toTarget.Size() * sin(FMath::DegreesToRadians(InitialYawAngle + angle)), 0);
             newToTarget = FVector2D(newTarget) - FVector2D(pawnPosition);
             newDisplacement = FMath::Min(newToTarget.Size(), speed * deltaTime) * newToTarget.GetSafeNormal();
             // Vérifie uniquement la présence de deathfloor initialement
-            if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * halfExtent * 2, newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false)) {
+            if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * modifiedHalfExtent, newTarget, modifiedHalfExtent, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false)) {
                 // Vérifie la présence de mur
-                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * halfExtent * 2, newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, true)) {
+                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * modifiedHalfExtent, newTarget, modifiedHalfExtent, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, true)) {
                     float distanceToPlayer = FVector::Distance(newTarget, playerPosition);
-                    if (farthestDistance < distanceToPlayer) {
+                    if (farthestDistance == distanceToPlayer) {
+                        if (FMath::FRand() < .5f) {
+                            farthestDistance = distanceToPlayer;
+                            farthestPosition = newTarget;
+                        }
+                    }
+                    else if (farthestDistance < distanceToPlayer) {
                         farthestDistance = distanceToPlayer;
                         farthestPosition = newTarget;
                     }
                 }
                 else {
                     float distanceToPlayer = FVector::Distance(hitResults[0].ImpactPoint, playerPosition);
-                    if (farthestDistance < distanceToPlayer) {
+                    if (farthestDistance == distanceToPlayer) {
+                        if (FMath::FRand() < .5f) {
+                            farthestDistance = distanceToPlayer;
+                            farthestPosition = newTarget;
+                        }
+                    }
+                    else if (farthestDistance < distanceToPlayer) {
                         farthestDistance = distanceToPlayer;
                         farthestPosition = newTarget;
                     }
@@ -228,8 +242,8 @@ bool ASDTAIController::FleeToTarget(UWorld* world, APawn* pawn, FVector playerPo
             newTarget = pawnPosition + FVector(toTarget.Size() * cos(FMath::DegreesToRadians(InitialYawAngle - angle)), toTarget.Size() * sin(FMath::DegreesToRadians(InitialYawAngle - angle)), 0);
             newToTarget = FVector2D(newTarget) - FVector2D(pawnPosition);
             newDisplacement = FMath::Min(newToTarget.Size(), speed * deltaTime) * newToTarget.GetSafeNormal();
-            if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * halfExtent * 2, newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false)) {
-                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * halfExtent * 2, newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, true)) {
+            if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * modifiedHalfExtent, newTarget, modifiedHalfExtent, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false)) {
+                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * modifiedHalfExtent, newTarget, modifiedHalfExtent, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, true)) {
                     float distanceToPlayer = FVector::Distance(newTarget, playerPosition);
                     if (farthestDistance < distanceToPlayer) {
                         farthestDistance = distanceToPlayer;
@@ -277,7 +291,7 @@ void ASDTAIController::Roam(APawn* pawn, float deltaTime)
 {
 	FVector forwardDir = pawn->GetActorForwardVector();
     m_Speed = FMath::Clamp(m_Speed, 50.0f, m_MaxSpeed / 2);
-    FleeToTarget(GetWorld(), pawn, pawn->GetActorLocation() - forwardDir * 100, FMath::Clamp(m_Speed, 50.0f, m_MaxSpeed / 2), deltaTime);
+    FleeToTarget(GetWorld(), pawn, pawn->GetActorLocation() - forwardDir * 100, FMath::Clamp(m_Speed, 50.0f, m_MaxSpeed / 2), deltaTime, true);
 }
 
 
@@ -380,12 +394,19 @@ bool ASDTAIController::IsVisible(UWorld* world, APawn* pawn, AActor* targetActor
 	if (pawn->GetDistanceTo(targetActor) > m_ViewDistance)
 		return false;
 
-	TArray<struct FHitResult> hitResult;
-    if (pawn && targetActor) SDTUtils::CastRay(world, pawn->GetActorLocation(), targetActor->GetActorLocation(), hitResult, false);
+	TArray<struct FHitResult> hitResults;
+    if (pawn && targetActor) {
+        if (m_ShouldDetectThroughDeathZone) SDTUtils::CastRay(world, pawn->GetActorLocation(), targetActor->GetActorLocation(), hitResults, false);
+        else {
+            FVector2D toTarget = FVector2D(targetActor->GetActorLocation()) - FVector2D(pawn->GetActorLocation());
+            FVector2D displacement = toTarget.Size() * toTarget.GetSafeNormal();
+            SDTUtils::BoxCast(world, pawn->GetActorLocation(), targetActor->GetActorLocation(), FVector(halfExtent.X * .1f, halfExtent.Y * .1f, halfExtent.Z), FVector(displacement, 0.f).ToOrientationQuat(), hitResults, true);
+        }
+    }
 
-	for (int j = 0; j < hitResult.Num(); ++j)
+	for (int j = 0; j < hitResults.Num(); ++j)
 	{
-		if (hitResult[j].GetActor() != targetActor && !hitResult[j].GetActor()->IsA(ASDTCollectible::StaticClass()))
+		if (hitResults[j].GetActor() != targetActor && !hitResults[j].GetActor()->IsA(ASDTCollectible::StaticClass()))
 			return false;
 	}
 	return true;

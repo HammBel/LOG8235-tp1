@@ -21,10 +21,10 @@ public:
     float m_Acceleration = 100.f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AI)
-    float m_VisionAngle = PI / 3;
+    float m_ViewDistance = 1000.f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AI)
-    float m_ViewDistance = 1000.f;
+    bool m_ShouldDetectThroughDeathZone = false;
 
     virtual void Tick(float deltaTime) override;
     virtual void BeginPlay() override;
@@ -41,7 +41,7 @@ private:
     bool m_LastPlayerPositionReached = true;
     float CalculateMovement(float maxSpeed, float acceleration, float deltaTime);
     bool MoveToTarget(UWorld* world, APawn* pawn, FVector target, float speed, float deltaTime);
-    bool FleeToTarget(UWorld* world, APawn* pawn, FVector playerPosition, float speed, float deltaTime);
+    bool FleeToTarget(UWorld* world, APawn* pawn, FVector playerPosition, float speed, float deltaTime, bool isRoaming = false);
     bool ChasePlayer(APawn* pawn, ACharacter* playerCharacter, float deltaTime);
     bool FleeFromPlayer(APawn* pawn, FVector target, float speed, float deltaTime);
     TArray<FOverlapResult> CollectTargetActorsInFrontOfCharacter(APawn const* pawn) const;
