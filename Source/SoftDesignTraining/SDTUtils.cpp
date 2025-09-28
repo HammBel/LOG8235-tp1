@@ -28,6 +28,7 @@ bool SDTUtils::IsPlayerPoweredUp(UWorld * uWorld)
     return castedPlayerCharacter->IsPoweredUp();
 }
 
+// Fonction RayCast initialement présente dans le projet ne nous permettais pas d'obtenir les hits obtenue lors du raycast, alors nous avons implémenté une nouvelle.
 bool SDTUtils::CastRay(UWorld* uWorld, const FVector& start, const FVector& end, TArray<struct FHitResult>& outHits, bool drawDebug, FCollisionObjectQueryParams* params)
 {
     if (uWorld == nullptr)
@@ -61,58 +62,6 @@ bool SDTUtils::CastRay(UWorld* uWorld, const FVector& start, const FVector& end,
 }
 
 
-bool SDTUtils::SphereCast(UWorld* uWorld, const FVector& start, const FVector& end, float radius, TArray<struct FHitResult>& outHits, bool drawDebug)
-{
-    if (uWorld == nullptr)
-        return false;
-
-    if (drawDebug)
-    {
-        FVector center = (start + end) * 0.5f;
-
-        float halfHeight;
-        FVector dir;
-        (end - start).ToDirectionAndLength(dir, halfHeight);
-
-        halfHeight *= 0.5f;
-        halfHeight += radius;
-
-
-        FQuat rotation = dir.ToOrientationQuat();
-
-        FQuat rotY = FQuat(rotation.GetRightVector(), HALF_PI);
-
-        rotation *= rotY;
-
-        DrawDebugCapsule(uWorld, center, halfHeight, radius, rotation, FColor::Green);
-
-
-
-        DrawDebugLine(uWorld, start, end, FColor::Red);
-    }
-
-
-
-    FCollisionObjectQueryParams objectQueryParams; // All objects
-    objectQueryParams.AddObjectTypesToQuery(ECC_GameTraceChannel3);
-    objectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
-    FCollisionShape collisionShape;
-    collisionShape.SetSphere(radius);
-    FCollisionQueryParams queryParams = FCollisionQueryParams::DefaultQueryParam;
-    queryParams.bReturnPhysicalMaterial = true;
-
-    uWorld->SweepMultiByObjectType(outHits, start, end, FQuat::Identity, objectQueryParams, collisionShape, queryParams);
-
-
-    //Draw hits
-    if (drawDebug)
-    {
-        for (int32 i = 0; i < outHits.Num(); ++i)
-            DebugDrawHitPoint(uWorld, outHits[i]);
-    }
-
-    return outHits.Num() > 0;
-}
 bool SDTUtils::SphereOverlap(UWorld* uWorld, const FVector& pos, float radius, TArray<struct FOverlapResult>& outOverlaps, bool drawDebug)
 {
     if (uWorld == nullptr)
@@ -122,7 +71,7 @@ bool SDTUtils::SphereOverlap(UWorld* uWorld, const FVector& pos, float radius, T
         DrawDebugSphere(uWorld, pos, radius, 24, FColor::Green);
 
 
-    FCollisionObjectQueryParams objectQueryParams; // All objects
+    FCollisionObjectQueryParams objectQueryParams;
     FCollisionShape collisionShape;
     collisionShape.SetSphere(radius);
     FCollisionQueryParams queryParams = FCollisionQueryParams::DefaultQueryParam;
@@ -130,7 +79,6 @@ bool SDTUtils::SphereOverlap(UWorld* uWorld, const FVector& pos, float radius, T
 
     uWorld->OverlapMultiByObjectType(outOverlaps, pos, FQuat::Identity, objectQueryParams, collisionShape, queryParams);
 
-    //Draw overlap results
     if (drawDebug)
     {
         for (int32 i = 0; i < outOverlaps.Num(); ++i)
@@ -159,12 +107,31 @@ void SDTUtils::DebugDrawPrimitive(UWorld* uWorld, const UPrimitiveComponent& pri
     DrawDebugBox(uWorld, center, extent, FColor::Red);
 }
 
+
+/**
+ * Effectue un "Box Cast" (sweep avec une boîte 3D) entre deux points dans le monde.
+ *
+ * Entrées :
+ *   @param uWorld        Monde de jeu actuel (UWorld*).
+ *   @param start         Position de départ du balayage.
+ *   @param end           Position d’arrivée du balayage.
+ *   @param halfExtents   Demi-tailles de la box (X,Y,Z).
+ *   @param orientation   Orientation de la box (FQuat).
+ *   @param outHits       Tableau des impacts détectés (résultat rempli).
+ *   @param shouldCheckWall Indique si on doit aussi vérifier les murs (WorldStatic).
+ *   @param drawDebug     Active/désactive le dessin de debug (box, ligne, impacts).
+ *
+ * Retour :
+ *   @return true  si au moins une collision est détectée.
+ *   @return false sinon.
+ */
+
 bool SDTUtils::BoxCast(
     UWorld* uWorld,
     const FVector& start,
     const FVector& end,
-    const FVector& halfExtents, // Half size of the box (X,Y,Z)
-    const FQuat& orientation,   // Box orientation
+    const FVector& halfExtents, 
+    const FQuat& orientation,  
     TArray<FHitResult>& outHits,
     bool shouldCheckWall,
     bool drawDebug
@@ -181,15 +148,14 @@ bool SDTUtils::BoxCast(
         float length;
         (end - start).ToDirectionAndLength(dir, length);
 
-        // Draw the swept box (as two boxes + line between)
         DrawDebugBox(uWorld, start, halfExtents, orientation, FColor::Green);
         DrawDebugBox(uWorld, end, halfExtents, orientation, FColor::Green);
         DrawDebugLine(uWorld, start, end, FColor::Red);
     }
 
-    FCollisionObjectQueryParams objectQueryParams; // All objects
-    objectQueryParams.AddObjectTypesToQuery(ECC_GameTraceChannel3);
-    if (shouldCheckWall) objectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
+    FCollisionObjectQueryParams objectQueryParams;
+    objectQueryParams.AddObjectTypesToQuery(ECC_GameTraceChannel3);                 // Death Floor
+    if (shouldCheckWall) objectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);  // Wall
     FCollisionShape collisionShape;
     collisionShape = FCollisionShape::MakeBox(halfExtents);
 

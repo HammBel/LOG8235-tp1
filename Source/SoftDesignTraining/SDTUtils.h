@@ -13,7 +13,6 @@ public:
     static bool IsPlayerPoweredUp(UWorld* uWorld);
 
     static bool CastRay(UWorld* uWorld, const FVector& start, const FVector& end, TArray<struct FHitResult>& outHits, bool drawDebug, FCollisionObjectQueryParams* params = nullptr);
-    static bool SphereCast(UWorld* uWorld, const FVector& start, const FVector& end, float radius, TArray<struct FHitResult>& outHits, bool drawDebug);
     static bool SphereOverlap(UWorld* uWorld, const FVector& pos, float radius, TArray<struct FOverlapResult>& outOverlaps, bool drawdebug);
     static bool BoxCast(
         UWorld* uWorld,

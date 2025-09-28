@@ -35,6 +35,7 @@ void ASoftDesignTrainingCharacter::OnBeginOverlap(UPrimitiveComponent* Overlappe
             UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASDTAIController::StaticClass(), FoundActors);
             for (auto actor : FoundActors) {
                 if (ASDTAIController* AIController = Cast<ASDTAIController>(actor)) {
+                    // Pour que les agents arretent de se deplacer vers la dernière position du joueur lorsque celui-ci meurt.
                     AIController->ForgetPlayer();
                 }
             }
@@ -61,6 +62,7 @@ void ASoftDesignTrainingCharacter::OnBeginOverlap(UPrimitiveComponent* Overlappe
             UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASDTAIController::StaticClass(), FoundActors);
             for (auto actor : FoundActors) {
                 if (ASDTAIController* AIController = Cast<ASDTAIController>(actor)) {
+                    // Pour que les agents arretent de se deplacer vers la dernière position du joueur lorsque celui-ci meurt.
                     AIController->ForgetPlayer();
                 }
             }
