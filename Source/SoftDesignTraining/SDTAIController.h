@@ -31,13 +31,7 @@ public:
     void Reset();
     void ForgetPlayer();
 
-    enum AIState {
-        ROAMING,
-        FLEEING_PLAYER,
-        CHASING_PLAYER,
-        CHASING_PICKUP
-    };
-    
+
 private:
     struct FCastInfo
     {
@@ -48,8 +42,6 @@ private:
         FColor DebugColor;
     };
 
-    void SetState(UWorld* world, APawn* pawn, ACharacter* playerCharacter);
-    AIState  m_State = ROAMING;
     float m_Speed = 0.f;
     float m_MaxSpeed = 0.f;
     bool m_IsFleeing = false;
@@ -64,6 +56,7 @@ private:
     float CalculateMovement(float maxSpeed, float acceleration, float deltaTime);
     bool AvoidWall(APawn* pawn, float speed, float deltaTime);
     bool MoveToTarget(UWorld* world, APawn* pawn, FVector target, float speed, float deltaTime);
+    bool FleeToTarget(UWorld* world, APawn* pawn, FVector playerPosition, float speed, float deltaTime);
     bool ChasePlayer(APawn* pawn, ACharacter* playerCharacter, float deltaTime);
     bool FleeFromPlayer(APawn* pawn, FVector target, float speed, float deltaTime);
     TArray<FOverlapResult> CollectTargetActorsInFrontOfCharacter(APawn const* pawn) const;
