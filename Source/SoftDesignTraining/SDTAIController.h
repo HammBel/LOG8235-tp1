@@ -68,5 +68,4 @@ private:
     void Roam(APawn* pawn, float deltaTime);
     TArray<FCastInfo> CheckSurrounding(APawn* pawn);
     int ComputeObstacleToDodge(APawn* pawn, const TArray<FCastInfo>& Casts);
-    bool AvoidWall2(APawn* pawn, float speed, float deltaTime);
 };

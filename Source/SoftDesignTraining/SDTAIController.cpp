@@ -47,6 +47,9 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
         FVector2D newToTarget;
         FVector2D newDisplacement;
         FVector newTarget;
+        FVector lastRightNormal = hitResults[0].ImpactNormal;
+        FVector lastLeftNormal = hitResults[0].ImpactNormal;
+        bool ignoreNormal = false;
         while (!leftSafePosition || !rightSafePosition) {
             if (!rightSafePosition) {
                 newTarget = pawnPosition + FVector(toTarget.Size() * cos(FMath::DegreesToRadians(InitialYawAngle + angle)), toTarget.Size() * sin(FMath::DegreesToRadians(InitialYawAngle + angle)), 0);
@@ -59,6 +62,11 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
                     else {
                         rightSafePosition = new FVector(rayHits[0].ImpactPoint);
                     }
+                }
+                else if (!ignoreNormal) {
+                    if ((hitResults[0].ImpactNormal - lastRightNormal).Size() > .2)
+                        ignoreNormal = true;
+                    lastRightNormal = hitResults[0].ImpactNormal;
                 }
             }
             if (!leftSafePosition) {
@@ -73,6 +81,11 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
                         leftSafePosition = new FVector(rayHits[0].ImpactPoint);
                     }
                 }
+                else if (!ignoreNormal) {
+                    if ((hitResults[0].ImpactNormal - lastLeftNormal).Size() > .2)
+                        ignoreNormal = true;
+                    lastLeftNormal = hitResults[0].ImpactNormal;
+                }
             }
             angle += 1;
             if (angle > 180)
@@ -80,8 +93,8 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
         }
         if (!leftSafePosition && !rightSafePosition) return false;
         else if (!leftSafePosition || !rightSafePosition) target = leftSafePosition ? *leftSafePosition : *rightSafePosition;
-        //else if (abs((*leftSafePosition - target).Size() - (*rightSafePosition - target).Size()) > 500)
-        //    target = (*leftSafePosition - target).Size() > (*rightSafePosition - target).Size() ? *rightSafePosition : *leftSafePosition;
+        else if (ignoreNormal)
+            target = (*leftSafePosition - target).Size() > (*rightSafePosition - target).Size() ? *rightSafePosition : *leftSafePosition;
         else if ((FVector::DotProduct(*leftSafePosition - target, normal) * normal).Size() < (FVector::DotProduct(*rightSafePosition - target, normal) * normal).Size())
             target = *leftSafePosition;
         else target = *rightSafePosition;
@@ -231,19 +244,6 @@ bool ASDTAIController::ChasePlayer(APawn* pawn, ACharacter* playerCharacter, flo
 }
 
 bool ASDTAIController::FleeFromPlayer(APawn* pawn, FVector target, float speed, float deltaTime) {
-    //FVector const pawnPosition(pawn->GetActorLocation());
-    //FVector2D const toTarget = FVector2D(pawnPosition) - FVector2D(target);
-    //if (FVector::Dist(pawn->GetActorLocation(), target) < FVector::Dist(pawn->GetActorLocation() + pawn->GetActorForwardVector(), target)) {
-    //    AvoidWall2(pawn, speed, deltaTime);
-    //    pawn->AddMovementInput(pawn->GetActorForwardVector(), speed / m_MaxSpeed);
-    //    return toTarget.Size() < speed * deltaTime;
-    //}
-	//FVector2D const displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
-
-	//pawn->SetActorRotation(FVector(displacement, 0.f).ToOrientationRotator());
-    //AvoidWall2(pawn, speed, deltaTime);
-	//pawn->AddMovementInput(pawn->GetActorForwardVector(), speed / m_MaxSpeed);
-	//return toTarget.Size() < speed * deltaTime;
     return FleeToTarget(GetWorld(), pawn, target, speed, deltaTime);
 }
 
@@ -325,116 +325,6 @@ int ASDTAIController::ComputeObstacleToDodge(APawn* pawn,const TArray<FCastInfo>
     }
 
     return BestIdx;
-}
-
-bool ASDTAIController::AvoidWall2(APawn* pawn, float speed, float deltaTime) {
-
-    FVector pawnLoc = pawn->GetActorLocation();
-    TArray<FCastInfo> Casts = CheckSurrounding(pawn);
- 
-
-    // Find the best hit with forward priority
-    FHitResult* BestHit = nullptr;
-    int BestIdx = ComputeObstacleToDodge(pawn, Casts);
-    if (BestIdx != -1 && BestIdx != 3 && BestIdx != 4 && Casts[BestIdx].Hits.Num() > 0) BestHit = &Casts[BestIdx].Hits[0];
-    if (!BestHit)
-    {
-        // No obstacle → accelerate to max
-        m_Speed = FMath::Min(m_Speed + m_Acceleration * deltaTime, m_MaxSpeed);
-        m_ObstacleToDodge = nullptr;
-        m_ObstacleToDodgeNormal = FVector();
-        return false;
-    }
-
-    // --- Avoidance logic ---
-    FVector beforeImpactPoint = (pawnLoc - BestHit->ImpactPoint).GetSafeNormal() * 100 + BestHit->ImpactPoint;
-    FVector right = FVector::CrossProduct(BestHit->ImpactNormal, pawn->GetActorUpVector()).GetSafeNormal();
-    FVector left = -right;
-    FVector directionToRotate;
-
-    float alphaLerp = 0.75f;
-    bool alreadyDodging = false;
-    for (int i = 0; i < 3; i++)
-    {
-        if (Casts[i].Hits.Num() > 0)
-        {
-            if (Casts[i].Hits[0].ImpactNormal == m_ObstacleToDodgeNormal ||
-                (m_ObstacleToDodge && Casts[i].Hits[0].GetActor() == m_ObstacleToDodge))
-            {
-                alreadyDodging = true;
-                break;
-            }
-        }
-    }
-
-    if (alreadyDodging)
-    {
-        directionToRotate = m_isRotatingRight ? right : left;
-    }
-    else if (BestIdx == 0 || BestIdx > 4) // forward
-    {
-        m_ObstacleToDodge = BestHit->GetActor();
-        m_ObstacleToDodgeNormal = BestHit->ImpactNormal;
-        TArray<FHitResult> hitRight, hitLeft;
-        SDTUtils::CastRay(GetWorld(), beforeImpactPoint, beforeImpactPoint + right * 1000, hitRight, false, nullptr);
-        SDTUtils::CastRay(GetWorld(), beforeImpactPoint, beforeImpactPoint + left * 1000, hitLeft, false, nullptr);
-
-        //DrawDebugDirectionalArrow(GetWorld(), beforeImpactPoint, beforeImpactPoint + right * 1000, 1, FColor::Black);
-        //DrawDebugDirectionalArrow(GetWorld(), beforeImpactPoint, beforeImpactPoint + left * 1000, 1, FColor::Yellow);
-
-        float distRight = hitRight.Num() > 0 ? FVector::Dist(beforeImpactPoint, hitRight[0].ImpactPoint) : BIG_NUMBER;
-        float distLeft = hitLeft.Num() > 0 ? FVector::Dist(beforeImpactPoint, hitLeft[0].ImpactPoint) : BIG_NUMBER;
-
-        ACharacter* playerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-        FVector playerLocation = playerCharacter->GetActorLocation();
-
-
-        FVector ToPlayer = playerLocation - pawnLoc;
-        ToPlayer.Z = 0.0f;
-
-        float Side = FVector::CrossProduct(pawn->GetActorForwardVector(), ToPlayer).Z;
-
-
-        if (distRight <= 200)
-            {
-                directionToRotate = left;
-                m_isRotatingRight = false;
-            }
-        else if(distLeft <= 200)
-            {
-                directionToRotate = right;
-                m_isRotatingRight = true;
-            }
-
-        else if (Side > 0) {
-            directionToRotate = right;
-            m_isRotatingRight = true;
-        }
-        else {
-            directionToRotate = left;
-            m_isRotatingRight = false;
-        }
-    }
-    else if (BestIdx == 1) // right
-    {
-        directionToRotate = left;
-        m_isRotatingRight = false;
-    }
-    else if (BestIdx == 2) // left
-    {
-        directionToRotate = right;
-        m_isRotatingRight = true;
-    }
-
-    // --- Rotation ---
-    FVector TargetLoc = pawnLoc + directionToRotate;
-    FVector Dir = (TargetLoc - pawnLoc).GetSafeNormal();
-
-    pawn->SetActorRotation(FMath::Lerp(pawn->GetActorRotation(), Dir.Rotation(), alphaLerp));
-
-    float targetSpeed = m_Speed;
-    FVector forwardDir = pawn->GetActorForwardVector().GetSafeNormal();
-    return true;
 }
 
 bool ASDTAIController::AvoidWall(APawn* pawn, float speed, float deltaTime) {
