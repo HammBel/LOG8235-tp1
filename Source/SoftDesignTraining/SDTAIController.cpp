@@ -37,7 +37,7 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
     FVector2D toTarget = FVector2D(target) - FVector2D(pawnPosition);
     FVector2D displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
     float InitialYawAngle = FMath::RadiansToDegrees(FMath::Atan2(toTarget.GetSafeNormal().Y, toTarget.GetSafeNormal().X));
-    SDTUtils::BoxCast(world, pawn->GetActorLocation(), target, halfExtent, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false);
+    SDTUtils::BoxCast(world, pawn->GetActorLocation(), target, halfExtent, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false, true);
     if (hitResults.Num() != 0) {
         FVector normal = hitResults[0].ImpactNormal;
         FVector right = FVector::CrossProduct(FVector(FVector2D(hitResults[0].ImpactNormal), 0.0f), pawn->GetActorUpVector()).GetSafeNormal();
@@ -190,28 +190,19 @@ bool ASDTAIController::FleeToTarget(UWorld* world, APawn* pawn, FVector playerPo
 
 void ASDTAIController::Roam(APawn* pawn, float deltaTime)
 {
-    AvoidWall(pawn, m_Speed, deltaTime);
+    //AvoidWall(pawn, m_Speed, deltaTime);
 	FVector forwardDir = pawn->GetActorForwardVector();
     m_Speed = FMath::Clamp(m_Speed, 50.0f, m_MaxSpeed / 2);
-    pawn->AddMovementInput(forwardDir, m_Speed / m_MaxSpeed);
+    FleeToTarget(GetWorld(), pawn, pawn->GetActorLocation() - forwardDir * 100, FMath::Clamp(m_Speed, 50.0f, m_MaxSpeed / 2), deltaTime);
+    //pawn->AddMovementInput(forwardDir, m_Speed / m_MaxSpeed);
 }
-
-
-
 
 void ASDTAIController::TakeDecision(UWorld* world, APawn* pawn, ACharacter* playerCharacter, float deltaTime) {
     if (playerCharacter && IsPlayerVisible(world, pawn, playerCharacter)) {
         if (SDTUtils::IsPlayerPoweredUp(world)) {
-            //if (!m_IsFleeing) {
-            //    UE_LOG(LogTemp, Warning, TEXT("START FLEEING"));
-            //    m_ObstacleToDodge = nullptr;
-            //    m_ObstacleToDodgeNormal = FVector();
-            //}
             m_IsFleeing = true;
             m_LastPlayerPositionReached = true;
             FleeFromPlayer(pawn, playerCharacter->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
-            //else pawn->AddMovementInput(pawn->GetActorForwardVector(), m_Speed / m_MaxSpeed);
-
         }
         else {
             m_IsFleeing = false;
@@ -237,11 +228,6 @@ void ASDTAIController::TakeDecision(UWorld* world, APawn* pawn, ACharacter* play
     }
 }
 
-void ASDTAIController::DrawVisionCone(UWorld* world, APawn* pawn, float angle) const
-{
-	DrawDebugCone(world, pawn->GetActorLocation(), pawn->GetActorForwardVector(), 500.f, angle, 0, 32, FColor::Green);
-}
-
 bool ASDTAIController::ChasePlayer(APawn* pawn, ACharacter* playerCharacter, float deltaTime) {
 	return MoveToTarget(GetWorld(), pawn, playerCharacter->GetActorLocation(), CalculateMovement(m_MaxSpeed, m_Acceleration, deltaTime), deltaTime);
 }
@@ -253,214 +239,6 @@ bool ASDTAIController::FleeFromPlayer(APawn* pawn, FVector target, float speed, 
 float ASDTAIController::CalculateMovement(float maxSpeed, float acceleration, float deltaTime) {
 	m_Speed = FMath::Clamp(m_Speed + m_Acceleration * deltaTime, 0.0f, maxSpeed);
 	return m_Speed;
-}
-
-TArray<ASDTAIController::FCastInfo> ASDTAIController::CheckSurrounding(APawn* pawn) {
-
-    FVector pawnLoc = pawn->GetActorLocation();
-    FVector fwd = pawn->GetActorForwardVector();
-    FVector rightVec = pawn->GetActorRightVector();
-
-    TArray<FCastInfo> Casts;
-    Casts.Add({ pawnLoc, pawnLoc + fwd * FMath::Min(m_Speed + 50, 250), {}, nullptr, FColor::Blue });                        // forward
-    Casts.Add({ pawnLoc + rightVec * halfWidth, pawnLoc + rightVec * halfWidth + fwd * FMath::Min(m_Speed + 50, 250), {}, nullptr, FColor::Red });   // right
-    Casts.Add({ pawnLoc - rightVec * halfWidth, pawnLoc - rightVec * halfWidth + fwd * FMath::Min(m_Speed + 50, 250), {}, nullptr, FColor::Yellow }); // left
-    Casts.Add({ pawnLoc - rightVec * halfWidth, pawnLoc + rightVec * halfWidth, {}, nullptr, FColor::Blue });
-    Casts.Add({ pawnLoc + rightVec * halfWidth, pawnLoc - rightVec * halfWidth, {}, nullptr, FColor::Blue });
-
-    FCollisionObjectQueryParams objectQueryParamsFloor = FCollisionObjectQueryParams::DefaultObjectQueryParam;;
-    objectQueryParamsFloor.AddObjectTypesToQuery(ECC_GameTraceChannel3);
-   
-    TArray<FCastInfo> CastsFloor;
-    CastsFloor.Add({ pawnLoc, pawnLoc + fwd * FMath::Min(m_Speed + 50, 250) - halfHeight * pawn->GetActorUpVector(), {}, &objectQueryParamsFloor, FColor::Blue});                        // forward
-    CastsFloor.Add({ pawnLoc + rightVec * halfWidth, pawnLoc + rightVec * halfWidth + fwd * FMath::Min(m_Speed + 50, 250) - halfHeight * pawn->GetActorUpVector(), {}, &objectQueryParamsFloor, FColor::Red });   // right
-    CastsFloor.Add({ pawnLoc - rightVec * halfWidth, pawnLoc - rightVec * halfWidth + fwd * FMath::Min(m_Speed + 50, 250) - halfHeight * pawn->GetActorUpVector(), {}, &objectQueryParamsFloor, FColor::Yellow }); // left
-    
-    for (auto& C : CastsFloor)
-    {
-        SDTUtils::CastRay(GetWorld(), C.Start, C.End, C.Hits, false, C.objectQueryParams);
-        ///DrawDebugDirectionalArrow(GetWorld(), C.Start, C.End, 1, C.DebugColor);
-        if (C.Hits.Num() > 0) {
-            FVector impactPoint = C.Hits[0].ImpactPoint;
-            Casts.Add({ FVector(FVector2D(C.Start), impactPoint.Z), impactPoint, {}, &objectQueryParamsFloor, FColor::Black });
-        }
-    }
-
-    for (auto& C : Casts)
-    {
-        SDTUtils::CastRay(GetWorld(), C.Start, C.End, C.Hits, false, C.objectQueryParams);
-        //DrawDebugDirectionalArrow(GetWorld(), C.Start, C.End, 1, C.DebugColor);
-    }
-    return Casts;
-}
-
-int ASDTAIController::ComputeObstacleToDodge(APawn* pawn,const TArray<FCastInfo>& Casts) {
-
-    FVector pawnLoc = pawn->GetActorLocation();
-
-    // Find the best hit with forward priority
-    int BestIdx = -1;
-    float ClosestDist = BIG_NUMBER;
-
-     // Step 1: Forward priority
-    if (Casts.Num() > 5) {
-        BestIdx = 5;
-    }
-    else if (Casts.Num() > 0 && Casts[0].Hits.Num() > 0) // 0 = forward
-    {
-        BestIdx = 0;
-    }
-    else
-    {
-        // Step 2: fallback to closest among left/right
-        for (int i = 1; i < Casts.Num(); i++)
-        {
-            if (Casts[i].Hits.Num() > 0)
-            {
-                float d = FVector::Dist(pawnLoc, Casts[i].Hits[0].ImpactPoint);
-                if (d < ClosestDist)
-                {
-                    ClosestDist = d;
-                    BestIdx = i;
-                }
-            }
-        }
-    }
-
-    return BestIdx;
-}
-
-bool ASDTAIController::AvoidWall(APawn* pawn, float speed, float deltaTime) {
-
-    FVector pawnLoc = pawn->GetActorLocation();
-    TArray<FCastInfo> Casts = CheckSurrounding(pawn);
-
-
-    // Find the best hit with forward priority
-    FHitResult* BestHit = nullptr;
-    int BestIdx = ComputeObstacleToDodge(pawn, Casts);
-
-    if (BestIdx != -1 && Casts[BestIdx].Hits.Num() > 0) BestHit = &Casts[BestIdx].Hits[0];
-    else
-    {
-        // No obstacle → accelerate to max
-        m_Speed = FMath::Min(m_Speed + m_Acceleration * deltaTime, m_MaxSpeed);
-        m_ObstacleToDodge = nullptr;
-        m_ObstacleToDodgeNormal = FVector();
-        return false;
-    }
-
-
-
-    // --- Avoidance logic ---
-    FVector targetDest = BestIdx < 5 ? FVector(FVector2D(BestHit->ImpactPoint), 0.0f) : pawnLoc;
-    FVector displacement = (pawnLoc - FVector(FVector2D(BestHit->ImpactPoint), 0.0f)).GetSafeNormal() * 100;
-    FVector beforeImpactPoint = BestIdx < 5 ? displacement + targetDest : targetDest - displacement;
-    FVector right = FVector::CrossProduct(FVector(FVector2D(BestHit->ImpactNormal), 0.0f), pawn->GetActorUpVector()).GetSafeNormal();
-    FVector left = -right;
-    FVector directionToRotate;
-
-    bool shouldDecel = BestIdx > 4;
-    float alphaLerp = BestIdx > 4 ? 0.90f : 0.05f;
-    bool alreadyDodging = false;
-    for (int i = 0; i < Casts.Num(); i++)
-    {
-        if (i == 3 || i == 4) continue;
-        if (Casts[i].Hits.Num() > 0)
-        {
-            if (Casts[i].Hits[0].ImpactNormal == m_ObstacleToDodgeNormal ||
-                (m_ObstacleToDodge && Casts[i].Hits[0].GetActor() == m_ObstacleToDodge))
-            {
-                alreadyDodging = true;
-                break;
-            }
-        }
-    }
-
-    if (alreadyDodging)
-    {
-        directionToRotate = m_isRotatingRight ? right : left;
-    }
-    else if (BestIdx == 0 || BestIdx > 4) // forward
-    {
-        m_ObstacleToDodge = BestHit->GetActor();
-        m_ObstacleToDodgeNormal = BestHit->ImpactNormal;
-        TArray<FHitResult> hitRight, hitLeft;
-        SDTUtils::CastRay(GetWorld(), beforeImpactPoint, beforeImpactPoint + right * 1000, hitRight, false, nullptr);
-        SDTUtils::CastRay(GetWorld(), beforeImpactPoint, beforeImpactPoint + left * 1000, hitLeft, false, nullptr);
-
-        FCollisionObjectQueryParams objectQueryParamsFloor = FCollisionObjectQueryParams::DefaultObjectQueryParam;;
-        objectQueryParamsFloor.AddObjectTypesToQuery(ECC_GameTraceChannel3);
-        TArray<FHitResult> hitFloorRight, hitFloorLeft;
-        SDTUtils::CastRay(GetWorld(), pawnLoc, (pawnLoc + right - halfHeight * pawn->GetActorUpVector()) * 1000, hitFloorRight, false, &objectQueryParamsFloor);
-        SDTUtils::CastRay(GetWorld(), pawnLoc, (pawnLoc + left - halfHeight * pawn->GetActorUpVector()) * 1000 , hitFloorLeft, false, &objectQueryParamsFloor);
-
-        //DrawDebugDirectionalArrow(GetWorld(), pawnLoc, (pawnLoc + right - halfHeight * pawn->GetActorUpVector()) * 1000, 1, FColor::Black, true);
-        //DrawDebugDirectionalArrow(GetWorld(), pawnLoc, (pawnLoc + left - halfHeight * pawn->GetActorUpVector()) * 1000, 1, FColor::Yellow, true);
-
-        float distRight = hitRight.Num() > 0 ? FVector::Dist(beforeImpactPoint, hitRight[0].ImpactPoint) : BIG_NUMBER;
-        float distLeft = hitLeft.Num() > 0 ? FVector::Dist(beforeImpactPoint, hitLeft[0].ImpactPoint) : BIG_NUMBER;
-        if (hitFloorRight.Num() > 0) {
-            directionToRotate = left;
-            m_isRotatingRight = false;
-        }
-        else if (hitFloorLeft.Num() > 0) {
-            directionToRotate = right;
-            m_isRotatingRight = true;
-        }
-        else if (distRight > distLeft)
-        {
-            directionToRotate = right;
-            m_isRotatingRight = true;
-        }
-        else
-        {
-            directionToRotate = left;
-            m_isRotatingRight = false;
-        }
-    }
-    else if (BestIdx == 1) // right
-    {
-        directionToRotate = left;
-        m_isRotatingRight = false;
-    }
-    else if (BestIdx == 2) // left
-    {
-        directionToRotate = right;
-        m_isRotatingRight = true;
-    }
-    else if (BestIdx == 3) // cul right
-    {
-        directionToRotate = -pawn->GetActorRightVector();
-        m_isRotatingRight = false;
-        shouldDecel = false;
-        alphaLerp = 0.01f;
-    }
-    else if (BestIdx == 4) // cul left
-    {
-        directionToRotate = pawn->GetActorRightVector();
-        m_isRotatingRight = true;
-        shouldDecel = false;
-        alphaLerp = 0.01f;
-    }
-
-    // --- Rotation ---
-    FVector TargetLoc = pawnLoc + directionToRotate;
-    FVector Dir = (TargetLoc - pawnLoc).GetSafeNormal();
-
-    pawn->SetActorRotation(FMath::Lerp(pawn->GetActorRotation(), Dir.Rotation(), alphaLerp));
-    float targetSpeed = m_Speed;
-    FVector forwardDir = pawn->GetActorForwardVector().GetSafeNormal();
-
-    if (shouldDecel) {
-        float cosAngle = FVector::DotProduct(forwardDir, Dir); // [-1,1]
-        float turnFactor = (cosAngle + 1.f) * 0.5f;            // [0,1]
-
-        targetSpeed = BestIdx > 4 ? m_Speed * turnFactor : m_MaxSpeed * turnFactor;
-
-        m_Speed = FMath::Lerp(m_Speed, targetSpeed, 0.25f);
-    }
-    return true;
 }
 
 void ASDTAIController::Reset() {
