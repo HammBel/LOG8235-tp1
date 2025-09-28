@@ -30,6 +30,15 @@ void ASoftDesignTrainingCharacter::OnBeginOverlap(UPrimitiveComponent* Overlappe
         if (ASDTAIController* controller = Cast<ASDTAIController>(GetController())) {
             controller->Reset();
         }
+        else {
+            TArray<AActor*> FoundActors;
+            UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASDTAIController::StaticClass(), FoundActors);
+            for (auto actor : FoundActors) {
+                if (ASDTAIController* AIController = Cast<ASDTAIController>(actor)) {
+                    AIController->ForgetPlayer();
+                }
+            }
+        }
     }
     else if(ASDTCollectible* collectibleActor = Cast<ASDTCollectible>(OtherActor))
     {
@@ -45,6 +54,15 @@ void ASoftDesignTrainingCharacter::OnBeginOverlap(UPrimitiveComponent* Overlappe
             SetActorLocation(m_StartingPosition);
             if (ASDTAIController* controller = Cast<ASDTAIController>(GetController())) {
                 controller->Reset();
+            }
+        }
+        else {
+            TArray<AActor*> FoundActors;
+            UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASDTAIController::StaticClass(), FoundActors);
+            for (auto actor : FoundActors) {
+                if (ASDTAIController* AIController = Cast<ASDTAIController>(actor)) {
+                    AIController->ForgetPlayer();
+                }
             }
         }
     }

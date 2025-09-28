@@ -56,10 +56,11 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
     FVector const pawnPosition(pawn->GetActorLocation());
     FVector2D toTarget = FVector2D(target) - FVector2D(pawnPosition);
     FVector2D displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
-    SDTUtils::BoxCast(world, pawn->GetActorLocation(), target, halfExtent, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false, true);
+    float InitialYawAngle = FMath::RadiansToDegrees(FMath::Atan2(toTarget.GetSafeNormal().Y, toTarget.GetSafeNormal().X));
+    UE_LOG(LogTemp, Warning, TEXT("angle %f"), InitialYawAngle);
+    SDTUtils::BoxCast(world, pawn->GetActorLocation(), target, halfExtent, FVector(displacement, 0.f).ToOrientationQuat(), hitResults, false);
     if (hitResults.Num() != 0) {
         FVector normal = hitResults[0].ImpactNormal;
-        UE_LOG(LogTemp, Warning, TEXT("%f, %f, %f"), normal.X, normal.Y, normal.Z);
         FVector right = FVector::CrossProduct(FVector(FVector2D(hitResults[0].ImpactNormal), 0.0f), pawn->GetActorUpVector()).GetSafeNormal();
         FVector* leftSafePosition = nullptr;
         FVector* rightSafePosition = nullptr;
@@ -69,13 +70,12 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
         FVector newTarget;
         while (!leftSafePosition || !rightSafePosition) {
             if (!rightSafePosition) {
-                newTarget = target + FVector(toTarget.Size() * cos(FMath::DegreesToRadians(angle)), toTarget.Size() * sin(FMath::DegreesToRadians(angle)), 0);
+                newTarget = pawnPosition + FVector(toTarget.Size() * cos(FMath::DegreesToRadians(InitialYawAngle + angle)), toTarget.Size() * sin(FMath::DegreesToRadians(InitialYawAngle + angle)), 0);
                 newToTarget = FVector2D(newTarget) - FVector2D(pawnPosition);
                 newDisplacement = FMath::Min(newToTarget.Size(), speed * deltaTime) * newToTarget.GetSafeNormal();
-                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation(), newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
-                    UE_LOG(LogTemp, Warning, TEXT("RIGHT SAFE"));
+                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * halfExtent * 2, newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
                     TArray<FHitResult> rayHits;
-                    if (!SDTUtils::CastRay(world, pawn->GetActorLocation(), newTarget, rayHits, true))
+                    if (!SDTUtils::CastRay(world, pawn->GetActorLocation(), newTarget, rayHits, false))
                         rightSafePosition = new FVector(newTarget);
                     else {
                         rightSafePosition = new FVector(rayHits[0].Location);
@@ -83,13 +83,12 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
                 }
             }
             if (!leftSafePosition) {
-                newTarget = target + FVector(toTarget.Size() * cos(FMath::DegreesToRadians(-angle)), toTarget.Size() * sin(FMath::DegreesToRadians(-angle)), 0);
+                newTarget = pawnPosition + FVector(toTarget.Size() * cos(FMath::DegreesToRadians(InitialYawAngle - angle)), toTarget.Size() * sin(FMath::DegreesToRadians(InitialYawAngle - angle)), 0);
                 newToTarget = FVector2D(newTarget) - FVector2D(pawnPosition);
                 newDisplacement = FMath::Min(newToTarget.Size(), speed * deltaTime) * newToTarget.GetSafeNormal();
-                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation(), newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
-                    UE_LOG(LogTemp, Warning, TEXT("LEFT SAFE"));
+                if (!SDTUtils::BoxCast(world, pawn->GetActorLocation() + FVector(newDisplacement, 0).GetSafeNormal() * halfExtent * 2, newTarget, halfExtent * 2, FVector(newDisplacement, 0.f).ToOrientationQuat(), hitResults, false, true)) {
                     TArray<FHitResult> rayHits;
-                    if (!SDTUtils::CastRay(world, pawn->GetActorLocation(), newTarget, rayHits, true))
+                    if (!SDTUtils::CastRay(world, pawn->GetActorLocation(), newTarget, rayHits, false))
                         leftSafePosition = new FVector(newTarget);
                     else {
                         leftSafePosition = new FVector(rayHits[0].Location);
@@ -100,31 +99,24 @@ bool ASDTAIController::MoveToTarget(UWorld* world, APawn* pawn, FVector target, 
             if (angle > 180)
                 break;
         }
-        if (!leftSafePosition && !rightSafePosition) {
-            UE_LOG(LogTemp, Warning, TEXT("DONT MOVE"));
-            return false;
-        }
-        else if (!leftSafePosition || !rightSafePosition) {
-            if (leftSafePosition) {
-                UE_LOG(LogTemp, Warning, TEXT("ONLY LEFT SAFE"));
-            }
-            else {
-                UE_LOG(LogTemp, Warning, TEXT("ONLY RIGHT SAFE"));
-            }
-            target = leftSafePosition ? *leftSafePosition : *rightSafePosition;
-        }
-        else if ((FVector::DotProduct(*leftSafePosition - target, normal) * normal).Size() < (FVector::DotProduct(*rightSafePosition - target, normal) * normal).Size()) {
-            UE_LOG(LogTemp, Warning, TEXT("PREFER LEFT"));
+        if (!leftSafePosition && !rightSafePosition) return false;
+        else if (!leftSafePosition || !rightSafePosition) target = leftSafePosition ? *leftSafePosition : *rightSafePosition;
+        else if (abs((*leftSafePosition - target).Size() - (*rightSafePosition - target).Size()) > 500)
+            target = (*leftSafePosition - target).Size() > (*rightSafePosition - target).Size() ? *rightSafePosition : *leftSafePosition;
+        else if ((FVector::DotProduct(*leftSafePosition - target, normal) * normal).Size() < (FVector::DotProduct(*rightSafePosition - target, normal) * normal).Size())
             target = *leftSafePosition;
-        }
-        else {
-            UE_LOG(LogTemp, Warning, TEXT("PREFER right"));
-            target = *rightSafePosition;
-        }
+        else target = *rightSafePosition;
     }
     toTarget = FVector2D(target) - FVector2D(pawnPosition);
     displacement = FMath::Min(toTarget.Size(), speed * deltaTime) * toTarget.GetSafeNormal();
-    pawn->SetActorRotation(FMath::Lerp(pawn->GetActorRotation(), FVector(displacement, 0.f).ToOrientationRotator(), 0.25f));
+    float cosAngle = FVector::DotProduct(pawn->GetActorForwardVector(), FVector(toTarget, 0).GetSafeNormal()); // [-1,1]
+    float turnFactor = (cosAngle + 1.f) * 0.5f;            // [0,1]
+
+    float targetSpeed = m_MaxSpeed * turnFactor;
+
+    m_Speed = FMath::Lerp(m_Speed, targetSpeed, 0.25f);
+    
+    pawn->SetActorRotation(FMath::Lerp(pawn->GetActorRotation(), FVector(displacement, 0.f).ToOrientationRotator(), .5f));
     pawn->AddMovementInput(pawn->GetActorForwardVector(), speed / m_MaxSpeed);
     return toTarget.Size() < speed * deltaTime;
 }
@@ -456,8 +448,8 @@ bool ASDTAIController::AvoidWall(APawn* pawn, float speed, float deltaTime) {
         SDTUtils::CastRay(GetWorld(), pawnLoc, (pawnLoc + left - halfHeight * pawn->GetActorUpVector()) * 1000 , hitFloorLeft, false, &objectQueryParamsFloor);
         UE_LOG(LogTemp, Warning, TEXT("Checking death floor"));
 
-        DrawDebugDirectionalArrow(GetWorld(), pawnLoc, (pawnLoc + right - halfHeight * pawn->GetActorUpVector()) * 1000, 1, FColor::Black, true);
-        DrawDebugDirectionalArrow(GetWorld(), pawnLoc, (pawnLoc + left - halfHeight * pawn->GetActorUpVector()) * 1000, 1, FColor::Yellow, true);
+        //DrawDebugDirectionalArrow(GetWorld(), pawnLoc, (pawnLoc + right - halfHeight * pawn->GetActorUpVector()) * 1000, 1, FColor::Black, true);
+        //DrawDebugDirectionalArrow(GetWorld(), pawnLoc, (pawnLoc + left - halfHeight * pawn->GetActorUpVector()) * 1000, 1, FColor::Yellow, true);
 
         float distRight = hitRight.Num() > 0 ? FVector::Dist(beforeImpactPoint, hitRight[0].ImpactPoint) : BIG_NUMBER;
         float distLeft = hitLeft.Num() > 0 ? FVector::Dist(beforeImpactPoint, hitLeft[0].ImpactPoint) : BIG_NUMBER;
@@ -528,7 +520,11 @@ bool ASDTAIController::AvoidWall(APawn* pawn, float speed, float deltaTime) {
 
 void ASDTAIController::Reset() {
 	m_Speed = 0;
-	m_LastPlayerPositionReached = true;
+    ForgetPlayer();
+}
+
+void ASDTAIController::ForgetPlayer() {
+    m_LastPlayerPositionReached = true;
 }
 
 TArray<FOverlapResult> ASDTAIController::CollectTargetActorsInFrontOfCharacter(APawn const* pawn) const

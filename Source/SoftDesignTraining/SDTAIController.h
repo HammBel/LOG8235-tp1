@@ -29,6 +29,7 @@ public:
     virtual void Tick(float deltaTime) override;
     virtual void BeginPlay() override;
     void Reset();
+    void ForgetPlayer();
 
     enum AIState {
         ROAMING,
